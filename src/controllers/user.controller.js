@@ -20,13 +20,12 @@ const registerUser = async(req,res) =>{
         }
 
         //checking if user already extsts or not
-        const existedUser = User.findOne({
+        const existedUser = await User.findOne({
             $or : [
                     {username}, 
                     {email}
                 ]
         })
-
         if(existedUser){
             throw new ApiError(409,'User with provided username and email already exists')
         }
@@ -35,7 +34,7 @@ const registerUser = async(req,res) =>{
         const coverImageLocalPath = req?.files?.coverImage?.[0]?.path;
 
         if(!avatarLocalPath){
-            throw new ApiError('400',"Avatar file is required");
+            throw new ApiError(400,"Avatar file is required");
         }
         
         //upload to cloudnary
@@ -43,7 +42,7 @@ const registerUser = async(req,res) =>{
         const coverImage = await uploadFileToCloudinary(coverImageLocalPath);
 
         if(!avatar){
-            throw new ApiError('400',"Avatar file is required");  
+            throw new ApiError(400,"Avatar file is required in cloudnary");  
         }
 
         const user = await User.create({
