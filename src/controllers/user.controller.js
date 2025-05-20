@@ -68,4 +68,93 @@ const registerUser = async(req,res) =>{
 
 }
 
-export {registerUser}
+const generateAccessAndRefreshTokens = async(userId) =>{
+    try {
+       const user = await User.findById(userId);
+       const accessToken = await user.generateAccessToken();
+       const refreshToken = await user.generateRefreshToken();
+       user.refreshToken = refreshToken;
+       await user.save({validateBeforeSave : false});
+       return  {accessToken,refreshToken};
+    } catch (error) {
+      throw new ApiError(500, "Something went wrong while generating tokens");  
+    }
+}
+
+const loginUser = async(req,res) =>{
+    try {
+        const { username,email,password } = req.body;
+        if(!(username || email)){
+           throw new ApiError(400,"Username or email is required")
+        }
+        
+        const matchedUser = await User.findOne({
+            $or : [{"email":email},{"username":username}]
+        });
+
+        if(!matchedUser){
+            throw new ApiError(404,"User does not exists")
+        }
+
+        const isPasswordValid = await matchedUser.isPasswordCorrect(password);
+
+        if(!isPasswordValid){
+           throw new ApiError(401,"Password Incorrect")
+        }
+        
+        const {accessToken,refreshToken} = await generateAccessAndRefreshTokens(matchedUser?._id);
+        const loggedInUser = await User.findById(matchedUser?._id).select("-password -refreshToken");
+
+        const options = {
+            httpOnly : true,
+            secure : true,
+        }
+
+        return res
+        .status(200)
+        .cookie("accessToken",accessToken,options)
+        .cookie("refreshToken",refreshToken,options)
+        .json(new ApiResponse(200,{
+            user : loggedInUser,
+            accessToken,
+            refreshToken,
+            message:"User loggedIn successfully"
+        },
+    ))
+
+    } catch (error) {
+        console.log(error?.message);
+        
+        res.status(error?.statusCode || 500).send({...error,message:error?.message || "Something went wrong at our end"})
+        
+    }
+    
+}
+
+const logoutUser = async(req,res) =>{
+try {
+    const userId = req.user._id;
+    await User.findByIdAndUpdate(userId,{
+        $set : {
+            refreshToken : undefined
+        }
+    },
+    {
+        new : true
+    })
+
+    const options = {
+        httpOnly : true,
+        secure : true,
+    }
+    return res
+    .status(200)
+    .clearCookie("accessToken")
+    .clearCookie("refreshToken")
+    .json(new ApiResponse(200,{},"User Logged out"))
+} catch (error) {
+    
+}
+}
+
+export {registerUser,loginUser,logoutUser}
