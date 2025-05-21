@@ -198,4 +198,149 @@ try {
 }
 }
 
-export {registerUser,loginUser,logoutUser,refreshAccessToken}
+
+const changeCurrentPassword = async(req,res) =>{
+    try {
+        const {email,username,oldPassword,newPassword} = req.body;
+        if(!(email || username)){
+            throw new ApiError(400,"email or username is required");
+        }
+        if(!password){
+            throw new ApiError(400,"Password is required");
+        }
+
+        const user = await User.findOne({
+            $or : [{email},{password}]
+        })
+
+        if(!user){
+            throw new ApiError(400,"User not found"); 
+        }
+
+        const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+        if(!isPasswordCorrect){
+            throw new ApiError(400, "Wrong password")
+        }
+
+        user.password = newPassword;
+        await user.save({validateBeforeSave : false});
+
+        return res
+        .status(200)
+        .json(new ApiResponse(200,{},"Password reset successfull"));
+
+
+    } catch (error) {
+        console.log(error?.message);
+        
+        res.status(error?.statusCode || 500).send({...error,message:error?.message || "Something went wrong at our end"}) 
+    }
+}
+
+const getCurrentUser = async(req,res) =>{
+    try {
+        return res
+        .status(200)
+        .json(new ApiResponse(200,req?.user,"User Fetched Successfully"))
+    } catch (error) {
+        console.log(error?.message);
+        
+        res.status(error?.statusCode || 500).send({...error,message:error?.message || "Something went wrong at our end"})  
+    }
+}
+
+
+const updateAccountDetails = async(req,res) =>{
+    try {
+        const {fullName, email} = req.body;
+
+        if(!(fullName && email)){
+            throw new ApiError(400,"All fileds are required")
+        }
+        const _id = req?.user?._id;
+        const user  = await User.findByIdAndUpdate(_id,
+             {$set :{
+                fullName,
+                email
+             }},
+             {new : true}).select("-refreshToken -password");
+
+        return res.status(200).json(new ApiResponse(200,user,"Account details updated successfully"))
+    } catch (error) {
+        console.log(error?.message);
+        res.status(error?.statusCode || 500).send({...error,message:error?.message || "Something went wrong at our end"})    
+    }
+
+}
+
+const updateUserAvatar = async(req,res)=>{
+    try {
+        const avatarLocalPath = req?.file?.path;
+        if(!avatarLocalPath){
+            throw new ApiError(400,"Avatar file is missing")
+        }
+        const avatar = await uploadFileToCloudinary(avatarLocalPath);
+        if(!avatar?.url){
+            new ApiError(400,"Error while uploading the file to cloudnary")
+        }
+        
+        const user = await User.findByIdAndUpdate(req?.user?._id,
+            {
+                $set :{
+                    avatar : avatar?.url
+                }
+            },
+            {new : true}
+        ).select("-password");
+
+        return res.send(200).json(new ApiResponse(200,
+            user,
+            "Avatar updated successfully"
+        ))
+    } catch (error) {
+        console.log(error?.message);
+        res.status(error?.statusCode || 500).send({...error,message:error?.message || "Something went wrong at our end"});  
+    }
+}
+
+
+const updateUserCoverImage = async(req,res)=>{
+    try {
+        const coverImageLocalPath = req?.file?.path;
+        if(!coverImageLocalPath){
+            throw new ApiError(400,"Cover image file is missing")
+        }
+        const coverImage = await uploadFileToCloudinary(coverImageLocalPath);
+        if(!coverImage?.url){
+            new ApiError(400,"Error while uploading the file to cloudnary")
+        }
+        
+        const user = await User.findByIdAndUpdate(req?.user?._id,
+            {
+                $set :{
+                    coverImage : coverImage?.url
+                }
+            },
+            {new : true}
+        ).select("-password");
+
+        return res.send(200).json(new ApiResponse(200,
+            user,
+            "Cover Image updated successfully"
+        ))
+    } catch (error) {
+        console.log(error?.message);
+        res.status(error?.statusCode || 500).send({...error,message:error?.message || "Something went wrong at our end"});  
+    }
+}
+
+export { registerUser,
+    loginUser,
+    logoutUser,
+    refreshAccessToken,
+    changeCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateUserAvatar,
+    updateUserCoverImage,
+}
